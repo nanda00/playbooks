@@ -1,0 +1,71 @@
+---
+- name: Install and Configure Tomcat
+  hosts: 172.31.13.40
+  gather_facts: false
+  become: yes
+  vars:
+   req_java_ver: java-1.8.0-devel
+   set_java: jre-1.8.0-openjdk
+   req_tomcat_ver: 9.0.55
+   tomcat_port: 8090
+   tomcat_manager: yoga1
+   tomcat_manager_password: nanda1
+   tomcat_hostmanager: yoga2
+   tomcat_hostmanager_password: nanda2
+   tomcat_url: https://dlcdn.apache.org/tomcat/tomcat-{{req_tomcat_ver.split('.')[0]}}/v{{req_tomcat_ver}}/bin/apache-tomcat-{{req_tomcat_ver}}.zip
+  tasks:
+   - name: Updating yum
+     yum:
+      name: "*"
+      state: latest
+   - name: Installing java
+     yum:
+      name: "{{req_java_ver}}"
+      state: present
+   - name: Setting default java
+     alternatives:
+      name: java
+      link: /usr/bin/java
+      path: /usr/lib/jvm/{{set_java}}/bin/java
+   - name: Downloading tomcat
+     get_url:
+      url: "{{tomcat_url}}"
+      dest: /opt
+   - name: Extracting tomcat
+     unarchive:
+      remote_src: yes
+      src: "/opt/apache-tomcat-{{req_tomcat_ver}}.zip"
+      dest: /opt
+   - name: Deleting zip file
+     file:
+      name: "/opt/apache-tomcat-{{req_tomcat_ver}}.zip"
+      state: absent
+   - name: Replacing default port with required port
+     template:
+      src: server.xml.j2
+      dest: /opt/apache-tomcat-{{req_tomcat_ver}}/conf/server.xml
+   - name: Adding users
+     template:
+      src: tomcat-users.xml.j2
+      dest: /opt/apache-tomcat-{{req_tomcat_ver}}/conf/tomcat-users.xml
+   - name: Configuring access to Manager App
+     template:
+      src: context.xml
+      dest: /opt/apache-tomcat-{{req_tomcat_ver}}/webapps/manager/META-INF/context.xml
+   - name: Configuring access to Host Manager
+     template:
+      src: context.xml
+      dest: /opt/apache-tomcat-{{req_tomcat_ver}}/webapps/host-manager/META-INF/context.xml
+   - name: Setting execute permission
+     file:
+      path="{{item}}"
+      mode=u+x
+     with_items:
+      - /opt/apache-tomcat-{{req_tomcat_ver}}/bin/catalina.sh
+      - /opt/apache-tomcat-{{req_tomcat_ver}}/bin/startup.sh
+      - /opt/apache-tomcat-{{req_tomcat_ver}}/bin/shutdown.sh
+   - name: Starting tomcat
+     async: 10
+     poll: 0
+     shell: sh /opt/apache-tomcat-{{req_tomcat_ver}}/bin/startup.sh
+...
